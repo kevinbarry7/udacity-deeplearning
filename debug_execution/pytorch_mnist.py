@@ -5,10 +5,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
+# ====================================#
+# 1. Import SMDebug framework class. #
+# ====================================#
+import smdebug.pytorch as smd
+
+
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, 3, 1) 
+        self.conv1 = nn.Conv2d(1, 32, 3, 1)
         self.conv2 = nn.Conv2d(32, 64, 3, 1)
         self.dropout1 = nn.Dropout(0.25)
         self.dropout2 = nn.Dropout(0.5)
@@ -31,8 +37,12 @@ class Net(nn.Module):
         return output
 
 
-def train(model, train_loader, optimizer, epoch):
+def train(model, train_loader, optimizer, epoch, hook):
     model.train()
+    # =================================================#
+    # 2. Set the SMDebug hook for the training phase. #
+    # =================================================#
+    hook.set_mode(smd.modes.TRAIN)
     for batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()
         output = model(data)
@@ -50,8 +60,12 @@ def train(model, train_loader, optimizer, epoch):
                 )
             )
 
-
-def test(model, test_loader):
+def test(model, test_loader, hook):
+    model.eval()
+    # ===================================================#
+    # 3. Set the SMDebug hook for the validation phase. #
+    # ===================================================#
+    hook.set_mode(smd.modes.EVAL)
     test_loss = 0
     correct = 0
     with torch.no_grad():
@@ -98,29 +112,37 @@ def main():
         "--lr", type=float, default=1.0, metavar="LR", help="learning rate (default: 1.0)"
     )
     args = parser.parse_args()
-
+    
     train_kwargs = {"batch_size": args.batch_size}
     test_kwargs = {"batch_size": args.test_batch_size}
 
     transform = transforms.Compose(
         [transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]
     )
-    dataset1 = datasets.CIFAR10("../data", train=True, download=True, transform=transform)
-    dataset2 = datasets.CIFAR10("../data", train=False, transform=transform)
+    dataset1 = datasets.MNIST("../data", train=True, download=True, transform=transform)
+    dataset2 = datasets.MNIST("../data", train=False, transform=transform)
     train_loader = torch.utils.data.DataLoader(dataset1, **train_kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
 
     model = Net()
 
+    # ======================================================#
+    # 4. Register the SMDebug hook to save output tensors. #
+    # ======================================================#
+    hook = smd.Hook.create_from_json_file()
+    hook.register_hook(model)
+
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     for epoch in range(1, args.epochs + 1):
-        train(model, train_loader, optimizer, epoch)
-        test(model, test_loader)
+        # ===========================================================#
+        # 5. Pass the SMDebug hook to the train and test functions. #
+        # ===========================================================#
+        train(model, train_loader, optimizer, epoch, hook)
+        test(model, test_loader, hook)
 
     torch.save(model.state_dict(), "mnist_cnn.pt")
 
 
 if __name__ == "__main__":
     main()
-

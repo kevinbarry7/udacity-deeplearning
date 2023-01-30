@@ -3,10 +3,10 @@
 from sagemaker.pytorch import PyTorch
 from sagemaker import get_execution_role
 
-hyperparameters = {"epochs": "2", "batch_size": "32", "test-batch-size": "100" "lr": "0.001"}
+hyperparameters = {"epochs": "2", "batch-size": "32", "test-batch-size": "100", "lr": "0.001"}
 
 estimator = PyTorch(
-    entry_point="scripts/pytorch_cifar.py",
+    entry_point="pytorch_cifar.py",
     base_job_name="sagemaker-script-mode", #can leave blank and pytorch will fill in
     role=get_execution_role(),
     instance_count=1,
@@ -16,6 +16,7 @@ estimator = PyTorch(
     py_version="py36",
 
 )
+
 
 estimator.fit(wait=True)
 
